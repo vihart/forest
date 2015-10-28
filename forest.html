@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+
+<html lang="en">
+	<head>
+		<title>Magical Mars Forest</title>
+		
+		<!--
+
+		This is what I'm starting with for my webVR experiments right now, so that they all have the same interactions.
+
+		It has oculus support for webVR browsers (thanks Mozilla!)
+		WASD + E/Q navigation support both in and out of VR (thanks, Andrea!)
+		Enter to go into VR mode,
+		Space to click links based on camera rotation,
+		and it even listens to the mouse.
+
+		Mozilla's boilerplate: https://github.com/MozVR/vr-web-examples/tree/master/threejs-vr-boilerplate
+
+		Andrea: https://github.com/hawksley
+
+		-->
+
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				background-color: #000;
+				color: #fff;
+				margin: 0px;
+				padding: 0;
+				overflow: hidden;
+			}
+		</style>
+	</head>
+
+	<body>
+	<!--Audio from Peter J https://musopen.org/music/349/erik-satie/gymnopedie-no-1-harp-arr/ -->
+	<!-- <audio id='music' src="media/satie.mp3"/>  -->
+
+	</body>
+
+	<!--
+	three.js 3d library
+	-->
+	<script src="js/lib/three.min.js"></script>
+
+	<!--
+	library for fast quaternion rotation
+	-->
+	<script src="js/lib/gl-matrix.js"></script>
+
+	<!--
+	VRControls.js acquires positional information from connected VR devices and applies the transformations to a three.js camera object.
+	 -->
+	<script src="js/vr/PhoneVR.js"></script>
+	<script src="js/vr/VRControls.js"></script>
+
+	<!--
+	VREffect.js handles stereo camera setup and rendering.
+	-->
+	<script src="js/vr/VREffect.js"></script>
+
+
+	<script>
+		/*
+		Setup three.js WebGL renderer
+		*/
+		var renderer = new THREE.WebGLRenderer( { antialias: true } );
+		/*
+		Append the canvas element created by the renderer to document body element.
+		*/
+		document.body.appendChild( renderer.domElement );
+		/*
+		Create a three.js scene
+		*/
+		var scene = new THREE.Scene();
+		/*
+		Create a three.js camera
+		*/
+		var camera = new THREE.PerspectiveCamera( 110, window.innerWidth / window.innerHeight, 1, 10000 );
+		/*
+		Apply VR headset positional data to camera.
+		*/
+		var controls = new THREE.VRControls( camera );
+		/*
+		Apply VR stereo rendering to renderer
+		*/
+		var effect = new THREE.VREffect( renderer );
+		effect.setSize( window.innerWidth, window.innerHeight );
+
+		renderer.setClearColor( 0x000033, 1 );
+
+		// scene.scale.set(.010,.010,.010);
+
+		/*
+		define interaction variables
+		*/
+		var mouseY = 1;
+		var mouseX = 1;
+		var clicky = 0;
+
+		//create info overlay
+		var infoText = THREE.ImageUtils.loadTexture( "media/overlay.png" ); 
+		var infoMaterial = new THREE.MeshBasicMaterial( {map: infoText, color: 0xffffff}); 
+		var infoBox = new THREE.BoxGeometry(2,2,2);
+		var infoSign = new THREE.Mesh( infoBox, infoMaterial );
+		infoSign.position.z = -3;
+		infoSign.position.x = -3;
+		infoSign.position.y = -50;
+		infoSign.frustumCulled = false;
+		scene.add( infoSign );
+
+
+
+		//trees
+		var treeArray = [];
+		var treeCount = 100;
+		var treeGeom = new THREE.CylinderGeometry(1,1,60,10,60);
+		var treeMat = new THREE.MeshLambertMaterial({color: 0x552200});
+		var size = 0;
+
+		for (var p = 0; p<treeCount; p++){
+			var treeScale = Math.random()*3;//(1+Math.random())*(Math.random()*Math.random() + 1 + Math.random());
+			treeArray[p] = new THREE.Mesh(treeGeom, treeMat);
+
+			var tempRand = Math.random();
+
+			for (var i = 0; i < treeArray[p].geometry.vertices.length; i++){
+				treeArray[p].geometry.vertices[i].x += (i%10+2 - 3)*(Math.sin(treeArray[p].geometry.vertices[i].y)+Math.sin(treeArray[p].geometry.vertices[i].y/(3+tempRand)))/(10000*tempRand);
+				treeArray[p].geometry.vertices[i].z += (i%10 - 5)*(Math.sin(treeArray[p].geometry.vertices[i].y)+Math.sin(treeArray[p].geometry.vertices[i].y/(3+tempRand)))/(10000*tempRand);
+			}
+			for (var i = 0; i < treeArray[p].geometry.vertices.length/100; i++){
+				treeArray[p].geometry.vertices[i].x *= 100/treeArray[p].geometry.vertices[i].y;
+				treeArray[p].geometry.vertices[i].z *= 100/treeArray[p].geometry.vertices[i].y;
+			}
+			treeArray[p].position.set(
+				Math.random()*100 -50, 
+				8*treeScale,
+				Math.random()*100 -50);
+			treeArray[p].rotation.y += Math.random();
+			treeArray[p].scale.set(treeScale,treeScale,treeScale);
+			treeArray[p].frustumCulled = false;
+			scene.add(treeArray[p]);
+		}
+
+		//ground
+		var planeGeometry = new THREE.PlaneGeometry( 100, 100, 100, 100 );
+		var planeMaterial = new THREE.MeshLambertMaterial( {color: 0x552200, side: THREE.DoubleSide, wireframe:false} );
+		var plane = new THREE.Mesh( planeGeometry, planeMaterial );
+		plane.rotation.x = 1.58;
+		plane.position.y = -5;
+		scene.add( plane );
+
+		for (var i = 0; i < plane.geometry.vertices.length; i++){
+			plane.geometry.vertices[i].z = Math.sin(plane.geometry.vertices[i].y)+2*Math.sin(plane.geometry.vertices[i].x/4);
+		}
+
+		var light = new THREE.SpotLight( 0xffffff, 5, 800);
+		light.position.set( 10,40,10);
+		light.castShadow = true; 
+		scene.add( light );
+
+
+		var light2 = new THREE.SpotLight( 0xffeeee, 5, 800);
+		light2.position.set( -8,24,0);
+		light2.castShadow = true; 
+		scene.add( light2 );
+
+
+var particleTexture = THREE.ImageUtils.loadTexture( 'media/particle.png' );
+
+		var particleTexture2 = THREE.ImageUtils.loadTexture( 'media/tallParticle.png' );
+
+		particleGroup = new THREE.Object3D();
+		particleAttributes = { startSize: [], startPosition: [], randomness: [] };
+		
+		var totalParticles = 200;
+		var wispCount = 100;
+		var pixieCount = 100;
+
+		var radiusRange = 50;
+
+		for( var i = 0; i < totalParticles/2; i++ ) 
+		{
+		    var spriteMaterial = new THREE.SpriteMaterial( { map: particleTexture, useScreenCoordinates: false, color: 0xffffff } );
+			
+			var sprite = new THREE.Sprite( spriteMaterial );
+			sprite.scale.set( 3, 3, 1.0 ); // imageWidth, imageHeight
+			sprite.position.set( Math.random() - 0.5, (Math.random() - 0.5)/10, Math.random() - 0.5 );
+			sprite.position.setLength( radiusRange * (Math.random() * 0.1 + 0.9) );
+			
+			// sprite.material.color.setRGB( Math.random()/2 + 0.5,  Math.random()/2 + 0.3,  0.5); 
+			sprite.material.color.setHSL( Math.random()/5, 0.9, 0.6 ); 
+			// sprite.opacity = 0.80; // translucent particles
+			sprite.material.blending = THREE.AdditiveBlending; // "glowing" particles
+			
+			particleGroup.add( sprite );
+			// add variable qualities to arrays, if they need to be accessed later
+			particleAttributes.startPosition.push( sprite.position.clone() );
+			particleAttributes.randomness.push( Math.random() );
+		}
+
+		for( var i = totalParticles/2; i < totalParticles; i++ ) 
+		{
+		    var spriteMaterial = new THREE.SpriteMaterial( { map: particleTexture2, useScreenCoordinates: false, color: 0xffffff } );
+			
+			var sprite = new THREE.Sprite( spriteMaterial );
+			sprite.scale.set( 3, 3, 1.0 ); // imageWidth, imageHeight
+			sprite.position.set( Math.random() - 0.5, (Math.random() - 0.5)/10, Math.random() - 0.5 );
+			sprite.position.setLength( radiusRange * (Math.random() * 0.1 + 0.9) );
+			
+			// sprite.material.color.setRGB( .5,  Math.random()/2 + .3,  Math.random()/2 + .5 ); 
+			sprite.material.color.setHSL( Math.random()/5, 0.9, 0.8 ); 
+			
+			// sprite.opacity = 0.80; // translucent particles
+			sprite.material.blending = THREE.AdditiveBlending; // "glowing" particles
+			
+			particleGroup.add( sprite );
+			// add variable qualities to arrays, if they need to be accessed later
+			particleAttributes.startPosition.push( sprite.position.clone() );
+			particleAttributes.randomness.push( Math.random() );
+		}
+
+
+		particleGroup.position.y = 0;
+		scene.add( particleGroup );
+
+		var time = 0;
+		var boing = [];
+		for (var i = 0; i<treeCount; i++){
+			boing[i]=0;
+		}
+		var stuckness = 0;
+		var cameraXZ;
+		var treeSpot;
+
+		function animate() {
+
+			camera.position.y = 0.5*Math.sin(camera.position.x/2)+Math.sin(camera.position.z/2)
+
+			cameraXZ = new THREE.Vector3(camera.position.x, 0, camera.position.z);
+
+			//tree collision
+			for (var i = 0; i<treeCount; i++){
+
+				treeSpot = new THREE.Vector3(treeArray[i].position.x, 0, treeArray[i].position.z);
+
+				//detect per tree
+				if (cameraXZ.distanceTo(treeSpot)<(treeArray[i].scale.x*2 + .3)){
+					camera.position.x
+					boing[i] = 3;
+					stuckness += 1;
+				}
+				//detect if stuck
+				if (stuckness > 0){
+					stuckness -= .001;
+				}
+				//boing back per tree
+				if(boing[i]>0){
+					camera.position.x -= (0.1)/(treeArray[i].position.x - camera.position.x);
+					camera.position.z -= (0.1)/(treeArray[i].position.z - camera.position.z);
+					// camera.position.sub(new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion).multiplyScalar(0.1));
+					boing[i] -= .1;
+				}
+			}
+
+
+			time += .001;
+
+			for ( var c = 0; c < particleGroup.children.length; c ++ ) 
+			{
+				var sprite = particleGroup.children[ c ];
+
+				var a = particleAttributes.randomness[c] + 1;
+				var pulseFactor = Math.sin(a * time) * 0.5 + 0.9;
+				sprite.position.x = particleAttributes.startPosition[c].x * pulseFactor;
+				sprite.position.y = particleAttributes.startPosition[c].y * pulseFactor/2;
+				sprite.position.z = particleAttributes.startPosition[c].z * pulseFactor;
+
+				if (sprite.material.color.getHSL().h < .5){
+
+				}
+
+			}
+
+			particleGroup.rotation.y = time * 0.1;
+
+			// infoSign.rotation.y +=.001;
+
+			/*
+			Update VR headset position and apply to camera.
+			*/
+			controls.update();
+			/*
+			Render the scene through the VREffect.
+			*/
+			effect.render( scene, camera );
+			requestAnimationFrame( animate );
+		}
+		/*
+		Kick off animation loop
+		*/
+		animate();
+
+		//links
+
+		function link(){
+			if(camera.rotation.x > -.1 && camera.rotation.x < .5 && camera.rotation.y > -.2 && camera.rotation.y < .3){
+				window.location="http://vihart.com";		
+			}else{
+				window.location="http://vihart.github.io/webVR-playing-with/index.html";
+			}
+
+		}
+
+		//listen for mouse movement to get mouseX and mouseY
+
+		document.body.addEventListener( 'mousemove', function (event) {
+		 	mouseY = event.clientY;
+		 	mouseX = event.clientX;
+		});
+
+		//listen for click
+
+		document.body.addEventListener( 'click', function(){
+			clicky = (clicky + 1) % 2;
+		})
+		/*
+		Listen for double click event to enter full-screen VR mode
+		*/
+		document.body.addEventListener( 'dblclick', function() {
+			effect.setFullScreen( true );
+		});
+		/*
+		Listen for keyboard events 
+		*/	
+
+		function onkey(event) {
+	    event.preventDefault();
+
+	    if (event.keyCode == 90) { // z
+	    	controls.zeroSensor(); //zero rotation
+	    } else if (event.keyCode == 70 || event.keyCode == 13) { //f or enter
+	    	effect.setFullScreen(true) //fullscreen else if (event.keyCode == 80) {//p
+	  		
+	  	} else if (event.keyCode == 32 || event.keyCode == 80) { //space or p
+	  		if (music.paused){
+	  			music.play();
+	  		} else{
+	  			music.pause();	
+	  		}
+	  	}
+
+	  };
+
+	    window.addEventListener("keydown", onkey, true);
+
+		document.addEventListener('keydown', function(event) { key(event, 1); }, false);
+		document.addEventListener('keyup', function(event) { key(event, -1); }, false);
+
+		function onWindowResize() {
+			camera.aspect = window.innerWidth / window.innerHeight;
+			camera.updateProjectionMatrix();
+			effect.setSize( window.innerWidth, window.innerHeight );
+		}
+		window.addEventListener( 'resize', onWindowResize, false );
+	</script>
+</html>
